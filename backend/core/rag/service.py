@@ -146,6 +146,20 @@ def answer_question(question: str) -> dict:
     print("\n==============================")
     print("📩 Question:", question)
 
+    # User requested specific fast greeting response
+    greetings = ["hi", "hello", "hey", "hii", "heya", "greetings"]
+    clean_q = question.strip().lower()
+    import string
+    clean_q = clean_q.translate(str.maketrans('', '', string.punctuation))
+    
+    if clean_q in greetings:
+        return {
+            "answer": "Hey! How can I help you today?",
+            "pdf_sources": [],
+            "web_sources": [],
+            "from_web": False,
+        }
+
     try:
         retriever = get_retriever()
 
@@ -218,10 +232,13 @@ Knowledge Base:
         from_web = False
         web_sources = []
 
+        # Only use web search if the LLM explicitly indicates it couldn't find the answer
+        ans_lower = answer.lower()
         use_web = (
-            not docs
-            or len(pdf_context.strip()) < 50
-            or (FALLBACK_PHRASE and FALLBACK_PHRASE in answer)
+            "i don't know" in ans_lower
+            or "i could not find" in ans_lower
+            or "not mentioned in the provided context" in ans_lower
+            or (FALLBACK_PHRASE and FALLBACK_PHRASE.lower() in ans_lower)
         )
 
         if use_web:
@@ -229,12 +246,8 @@ Knowledge Base:
 
             web_answer, web_sources = web_search_fallback(question)
 
-            # Combine answers instead of replacing blindly
-            if docs:
-                answer = f"{answer}\n\n---\n🌐 Additional Info (Web):\n{web_answer}"
-            else:
-                answer = web_answer
-
+            # Never blindly replace the LLM answer, just append or provide the web answer
+            answer = f"{answer}\n\n---\n🌐 Additional Info (Web):\n{web_answer}"
             from_web = True
 
         # -------------------------
