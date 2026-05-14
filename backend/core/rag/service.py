@@ -151,6 +151,20 @@ def answer_question(question: str) -> dict:
     print("\n==============================")
     print("📩 Question:", question)
 
+    # Hardcoded greeting bypass
+    greetings = ["hi", "hello", "hey", "hii", "heya", "greetings", "whats up", "what's up"]
+    clean_q = question.strip().lower()
+    import string
+    clean_q = clean_q.translate(str.maketrans('', '', string.punctuation))
+    
+    if clean_q in greetings:
+        return {
+            "answer": "Hey! How can I help you today? You can ask me anything about the university guidelines.",
+            "pdf_sources": [],
+            "web_sources": [],
+            "from_web": False,
+        }
+
     try:
         retriever = get_retriever()
 
