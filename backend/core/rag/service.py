@@ -26,25 +26,20 @@ _tavily_client = None
 # ---------------------------------------------------
 
 prompt = ChatPromptTemplate.from_template(
-    """You are a strict university assistant.
+    """You are UniGPT, an intelligent, helpful, and friendly conversational assistant for the university.
 
-You MUST ONLY answer using the provided context.
+You have access to the university's knowledge base and the user's previous conversation history.
+Please answer the user's questions naturally, conversationally, and concisely, just like a smart human assistant would.
 
-If the answer is not clearly found in the context, respond EXACTLY with:
-"I'm sorry, I could not find that information in the university guidelines."
-
-Do NOT:
-
-* add extra information
-* mention technical issues
-* act conversational
-* invent anything
+- If the user greets you or asks a conversational question, reply naturally and refer to the Previous Conversation if needed.
+- If the user asks a specific question about the university, use the Knowledge Base to provide a highly accurate answer.
+- If you don't know the answer, politely say so. Do not invent facts.
 
 <context>
 {context}
 </context>
 
-Question: {input}
+User Input: {input}
 """
 )
 
@@ -151,20 +146,6 @@ def answer_question(question: str) -> dict:
     print("\n==============================")
     print("📩 Question:", question)
 
-    # Hardcoded greeting bypass
-    greetings = ["hi", "hello", "hey", "hii", "heya", "greetings", "whats up", "what's up"]
-    clean_q = question.strip().lower()
-    import string
-    clean_q = clean_q.translate(str.maketrans('', '', string.punctuation))
-    
-    if clean_q in greetings:
-        return {
-            "answer": "Hey! How can I help you today? You can ask me anything about the university guidelines.",
-            "pdf_sources": [],
-            "web_sources": [],
-            "from_web": False,
-        }
-
     try:
         retriever = get_retriever()
 
@@ -230,24 +211,6 @@ Knowledge Base:
 
         answer = result.content.strip()
         print("🤖 LLM Answer:", answer[:200])
-
-        # -------------------------
-        # STRICT OUTPUT VALIDATION
-        # -------------------------
-        if not answer or len(answer.strip()) < 5:
-            answer = FALLBACK_PHRASE
-
-        # If answer contains irrelevant phrases → reject it
-        bad_patterns = [
-            "technical difficulties",
-            "I'm glad you're here",
-            "I am here to help",
-            "as an AI",
-        ]
-
-        if any(p.lower() in answer.lower() for p in bad_patterns):
-            print("❌ LLM produced garbage → forcing fallback")
-            answer = FALLBACK_PHRASE
 
         # -------------------------
         # SMART FALLBACK LOGIC
