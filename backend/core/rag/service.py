@@ -26,15 +26,10 @@ _tavily_client = None
 # ---------------------------------------------------
 
 prompt = ChatPromptTemplate.from_template(
-    """You are UniGPT, an intelligent, helpful, and friendly conversational assistant for the university.
+    """You are UniGPT, an intelligent, helpful, and friendly conversational assistant. 
+You can answer questions about the university using the University Knowledge Base, or answer general real-time questions using the Web Search Results.
 
-You have access to the university's knowledge base and the user's previous conversation history.
-Please answer the user's questions naturally, conversationally, but KEEP YOUR ANSWERS EXTREMELY CRISP AND SIMPLE. 
-Do not write long paragraphs or ramble. Get straight to the point.
-
-- If the user greets you or asks a conversational question, reply naturally and refer to the Previous Conversation if needed.
-- If the user asks a specific question about the university, use the Knowledge Base to provide a highly accurate answer. Keep it brief.
-- If you don't know the answer, politely say so in one sentence. Do not invent facts.
+KEEP YOUR ANSWERS EXTREMELY CRISP AND SIMPLE. Do not write long paragraphs or ramble. Get straight to the point.
 
 <context>
 {context}
@@ -43,7 +38,6 @@ Do not write long paragraphs or ramble. Get straight to the point.
 User Input: {input}
 """
 )
-
 
 # ---------------------------------------------------
 # LLM (CACHED)
@@ -78,10 +72,7 @@ def get_tavily_client():
 
     key = os.getenv("TAVILY_API_KEY")
 
-    print(f"🔑 Tavily Key Loaded: {key}")
-
     if not key or "your_" in key:
-        print("❌ Invalid Tavily API Key")
         return None
 
     # Always reinitialize (avoid stale cache)
@@ -100,7 +91,7 @@ def web_search_fallback(question: str):
         resp = client.search(
             query=question,
             search_depth="basic",
-            max_results=5,
+            max_results=3,
             include_answer=True,
         )
     except Exception as e:
@@ -173,11 +164,6 @@ def answer_question(question: str) -> dict:
             print("❌ Retriever error:", e)
             docs = []
 
-        print("📄 Docs retrieved:", len(docs))
-        for d in docs:
-            print("---- DOC ----")
-            print(d.page_content[:200])
-
         # -------------------------
         # PDF CONTEXT
         # -------------------------
@@ -193,6 +179,20 @@ def answer_question(question: str) -> dict:
                 pdf_sources.append(f"{src} (page {page})")
 
         # -------------------------
+        # PRE-LLM WEB SEARCH
+        # -------------------------
+        web_context = ""
+        web_sources_list = []
+        from_web = False
+
+        if not docs or len(pdf_context.strip()) < 50:
+            print("🌐 Triggering Pre-LLM Web Search")
+            web_answer, web_sources_list = web_search_fallback(question)
+            if web_answer and web_answer != "No clear answer found.":
+                web_context = f"Web Search Results:\n{web_answer}"
+                from_web = True
+
+        # -------------------------
         # MEMORY
         # -------------------------
         chat_context = get_chat_history()
@@ -204,11 +204,11 @@ def answer_question(question: str) -> dict:
 Previous Conversation:
 {chat_context}
 
-Knowledge Base:
+University Knowledge Base:
 {pdf_context}
-"""
 
-        print("🧠 Context length:", len(final_context))
+{web_context}
+"""
 
         # -------------------------
         # LLM CALL
@@ -227,46 +227,20 @@ Knowledge Base:
         answer = result.content.strip()
         print("🤖 LLM Answer:", answer[:200])
 
-        # -------------------------
-        # SMART FALLBACK LOGIC
-        # -------------------------
-        from_web = False
-        web_sources = []
-
-        # Only use web search if the LLM explicitly indicates it couldn't find the answer
-        ans_lower = answer.lower()
-        use_web = (
-            "i don't know" in ans_lower
-            or "i could not find" in ans_lower
-            or "not mentioned in the provided context" in ans_lower
-            or (FALLBACK_PHRASE and FALLBACK_PHRASE.lower() in ans_lower)
-        )
-
-        if use_web:
-            print("🌐 Using web search")
-
-            web_answer, web_sources = web_search_fallback(question)
-
-            # Never blindly replace the LLM answer, just append or provide the web answer
-            answer = f"{answer}\n\n---\n🌐 Additional Info (Web):\n{web_answer}"
-            from_web = True
-
-        # -------------------------
-        # FINAL RESPONSE
-        # -------------------------
         return {
             "answer": answer,
             "pdf_sources": pdf_sources,
-            "web_sources": web_sources,
+            "web_sources": web_sources_list,
             "from_web": from_web,
         }
 
     except Exception as e:
         print("\n🔥 FULL ERROR TRACE:")
+        import traceback
         traceback.print_exc()
 
         return {
-            "answer": str(e),   # IMPORTANT: show real error
+            "answer": str(e),
             "pdf_sources": [],
             "web_sources": [],
             "from_web": False,
