@@ -27,6 +27,8 @@ _tavily_client = None
 
 prompt = ChatPromptTemplate.from_template(
     """You are UniGPT, an intelligent, helpful, and friendly conversational assistant. 
+Today's Date and Time: {current_time}
+
 You can answer questions about the university using the University Knowledge Base, or answer general real-time questions using the Web Search Results.
 
 KEEP YOUR ANSWERS EXTREMELY CRISP AND SIMPLE. Do not write long paragraphs or ramble. Get straight to the point.
@@ -90,7 +92,7 @@ def web_search_fallback(question: str):
     try:
         resp = client.search(
             query=question,
-            search_depth="basic",
+            search_depth="advanced",
             max_results=3,
             include_answer=True,
         )
@@ -213,12 +215,16 @@ University Knowledge Base:
         # -------------------------
         # LLM CALL
         # -------------------------
+        import datetime
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         llm = get_llm()
         chain = prompt | llm
 
         result = chain.invoke({
             "context": final_context,
-            "input": question
+            "input": question,
+            "current_time": current_time
         })
 
         if not hasattr(result, "content"):
