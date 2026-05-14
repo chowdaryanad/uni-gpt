@@ -16,7 +16,12 @@ SECRET_KEY = "django-insecure-uni-assistant-dev-key-change-before-prod"
 
 DEBUG = True  # Keep TRUE for development
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "unigpt-backend-anand-hxcvd2ghaeeqbsab.centralindia-01.azurewebsites.net",
+    "169.254.129.2"
+]
 
 # -------------------------------------------------------------
 # INSTALLED APPS
