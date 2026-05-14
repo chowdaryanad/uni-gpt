@@ -40,6 +40,18 @@ jobs:
           path: |
             .
             !antenv/
+            !backend/venv/
+            !backend/db.sqlite3
+            !backend/data/
+            !.git/
+            !**/__pycache__/
+            !force.txt
+            !rebuild.txt
+            !test.txt
+            !package-lock.json
+            !backend/.env
+            !.env
+            !backend/requirements.txt
 
       # 🚫 Opting Out of Oryx Build
       # If you prefer to disable the Oryx build process during deployment, follow these steps:
