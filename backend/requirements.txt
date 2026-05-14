@@ -69,7 +69,6 @@ pydantic-settings==2.14.0
 pydantic_core==2.46.3
 Pygments==2.20.0
 python-dotenv==1.2.2
-pywin32==311
 PyYAML==6.0.3
 qdrant-client==1.17.1
 regex==2026.4.4
