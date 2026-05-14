@@ -16,12 +16,7 @@ SECRET_KEY = "django-insecure-uni-assistant-dev-key-change-before-prod"
 
 DEBUG = True  # Keep TRUE for development
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "unigpt-backend-anand-hxcvd2ghaeeqbsab.centralindia-01.azurewebsites.net",
-    "169.254.129.2"
-]
+ALLOWED_HOSTS = ["*"]
 
 # -------------------------------------------------------------
 # INSTALLED APPS
@@ -48,6 +43,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # must be very high
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -119,8 +115,9 @@ USE_TZ = True
 # -------------------------------------------------------------
 # STATIC FILES
 # -------------------------------------------------------------
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static")
 ]
@@ -156,7 +153,4 @@ REST_FRAMEWORK = {
 # DEFAULT AUTO FIELD
 # -------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
 
