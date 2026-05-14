@@ -7,6 +7,7 @@ const micBtn = document.getElementById("mic-btn");
 const newChatBtn = document.getElementById("new-chat-btn");
 const historyList = document.getElementById("history-list");
 const downloadBtn = document.getElementById("download-chat");
+const deleteBtn = document.getElementById("delete-chat");
 
 
 // --- Conversation state (localStorage) ---
@@ -216,6 +217,8 @@ async function sendMessage() {
     createNewConversation();
   }
 
+  const activeConvIdAtSend = currentConversationId;
+
   // User message
   displayMessage("user", question);
   input.value = "";
@@ -233,6 +236,17 @@ async function sendMessage() {
 
     const data = await response.json();
 
+    if (currentConversationId !== activeConvIdAtSend) {
+      // The user switched tabs while waiting.
+      // Append a 'try again' message to the *original* conversation quietly without rendering
+      const targetConv = conversations.find(c => c.id === activeConvIdAtSend);
+      if (targetConv) {
+         targetConv.messages.push({ sender: "bot", text: "⚠ Chat switched. Please try again.", time: new Date().toISOString() });
+         saveConversations();
+      }
+      return; // Do not display in current window
+    }
+
     if (data.error) {
       displayMessage("bot", "⚠ " + data.error);
     } else {
@@ -240,7 +254,9 @@ async function sendMessage() {
     }
   } catch (err) {
     console.error(err);
-    displayMessage("bot", "⚠ Server error. Please try again.");
+    if (currentConversationId === activeConvIdAtSend) {
+      displayMessage("bot", "⚠ Server error. Please try again.");
+    }
   } finally {
     // Hide typing indicator
     setTyping(false);
@@ -389,6 +405,29 @@ if (downloadBtn) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  });
+}
+
+// --- Delete current chat ---
+if (deleteBtn) {
+  deleteBtn.addEventListener("click", () => {
+    if (!currentConversationId) return;
+    
+    // Remove from array
+    conversations = conversations.filter(c => c.id !== currentConversationId);
+    saveConversations();
+    
+    // Pick the next available conversation, or create a new one
+    if (conversations.length > 0) {
+      currentConversationId = conversations[0].id;
+      renderHistoryList();
+      renderCurrentConversation();
+    } else {
+      currentConversationId = null;
+      renderHistoryList();
+      if (chatWindow) chatWindow.innerHTML = "";
+      createNewConversation();
+    }
   });
 }
 
