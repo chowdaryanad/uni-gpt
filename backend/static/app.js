@@ -131,12 +131,6 @@ function renderCurrentConversation() {
     
     emptyState.innerHTML = `
       <h3>Welcome to uniGPT!</h3>
-      <p>I can answer questions about the university.</p>
-      <div class="starter-chips">
-        <button class="chip" onclick="handleStarterClick('What are the attendance rules?')">📋 What are the attendance rules?</button>
-        <button class="chip" onclick="handleStarterClick('How do I pay my fees?')">💳 How do I pay my fees?</button>
-        <button class="chip" onclick="handleStarterClick('Where is the library?')">📚 Where is the library?</button>
-      </div>
     `;
     chatWindow.appendChild(emptyState);
     return;
@@ -214,10 +208,7 @@ function displayMessage(sender, text, timeString = null, storeInConv = true, sou
     }
     
     if (sources.from_web) {
-      const span = document.createElement("span");
-      span.className = "source-badge web";
-      span.textContent = "🌐 Web Search";
-      sourcesDiv.appendChild(span);
+      // Intentionally omitting the Web Search badge
     }
     
     if (sourcesDiv.children.length > 0) {
@@ -411,10 +402,7 @@ async function sendMessage() {
       }
       
       if (finalSources.from_web) {
-        const span = document.createElement("span");
-        span.className = "source-badge web";
-        span.textContent = "🌐 Web Search";
-        sourcesDiv.appendChild(span);
+        // Intentionally omitting the Web Search badge
       }
       
       if (sourcesDiv.children.length > 0) {

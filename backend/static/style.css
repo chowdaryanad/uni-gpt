@@ -502,3 +502,41 @@ body.dark .source-badge.web {
   margin-top: 4px;
 }
 
+/* ===== Mobile Responsiveness ===== */
+@media (max-width: 768px) {
+  .page-bg {
+    align-items: flex-start;
+  }
+
+  .app-shell {
+    flex-direction: column;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    gap: 0;
+  }
+
+  .sidebar {
+    width: 100%;
+    border-radius: 0;
+    max-height: 25vh;
+    box-shadow: none;
+    border-bottom: 1px solid #ccc;
+  }
+
+  body.dark .sidebar {
+    border-bottom: 1px solid #374151;
+  }
+
+  .chat-shell {
+    width: 100%;
+    flex: 1;
+    border-radius: 0;
+    box-shadow: none;
+    height: auto;
+  }
+
+  .chat-header {
+    border-radius: 0;
+  }
+}
