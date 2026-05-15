@@ -207,7 +207,7 @@ function displayMessage(sender, text, timeString = null, storeInConv = true) {
   scrollToBottom();
 }
 
-// --- Send message ---
+// --- Send message (streaming word-by-word) ---
 async function sendMessage() {
   const question = input.value.trim();
   if (!question) return;
@@ -228,38 +228,128 @@ async function sendMessage() {
   setTyping(true);
 
   try {
-    const response = await fetch("/api/chat/", {
+    const response = await fetch("/api/chat/stream/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
     });
 
-    const data = await response.json();
-
-    if (currentConversationId !== activeConvIdAtSend) {
-      // The user switched tabs while waiting.
-      // Append a 'try again' message to the *original* conversation quietly without rendering
-      const targetConv = conversations.find(c => c.id === activeConvIdAtSend);
-      if (targetConv) {
-         targetConv.messages.push({ sender: "bot", text: "⚠ Chat switched. Please try again.", time: new Date().toISOString() });
-         saveConversations();
-      }
-      return; // Do not display in current window
+    if (!response.ok) {
+      const errData = await response.json();
+      setTyping(false);
+      displayMessage("bot", "⚠ " + (errData.error || "Server error"));
+      return;
     }
 
-    if (data.error) {
-      displayMessage("bot", "⚠ " + data.error);
-    } else {
-      displayMessage("bot", data.answer || "I couldn't generate a response.");
+    // Hide typing indicator and create the bot bubble immediately
+    setTyping(false);
+
+    // Create bot message row (empty, will fill token by token)
+    const row = document.createElement("div");
+    row.className = "msg-row bot";
+
+    const avatar = document.createElement("div");
+    avatar.className = "avatar avatar-bot";
+    avatar.textContent = "AI";
+
+    const msg = document.createElement("div");
+    msg.className = "msg bot";
+
+    const textDiv = document.createElement("div");
+    textDiv.className = "msg-text";
+    textDiv.textContent = "";
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "msg-meta";
+    const now = new Date();
+    metaDiv.textContent = now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    msg.appendChild(textDiv);
+    msg.appendChild(metaDiv);
+    row.appendChild(avatar);
+    row.appendChild(msg);
+    chatWindow.appendChild(row);
+    scrollToBottom();
+
+    // Read SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullAnswer = "";
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE lines
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+
+        const jsonStr = line.slice(6); // Remove "data: "
+        try {
+          const payload = JSON.parse(jsonStr);
+
+          if (payload.error) {
+            textDiv.textContent += "⚠ " + payload.error;
+            break;
+          }
+
+          if (payload.done) {
+            // Streaming complete
+            break;
+          }
+
+          if (payload.token) {
+            fullAnswer += payload.token;
+            textDiv.textContent = fullAnswer;
+            scrollToBottom();
+          }
+        } catch (e) {
+          // Skip malformed JSON
+        }
+      }
+    }
+
+    // Check if user switched conversations
+    if (currentConversationId !== activeConvIdAtSend) {
+      const targetConv = conversations.find(c => c.id === activeConvIdAtSend);
+      if (targetConv) {
+        targetConv.messages.push({
+          sender: "bot",
+          text: fullAnswer || "⚠ Chat switched.",
+          time: new Date().toISOString(),
+        });
+        saveConversations();
+      }
+      return;
+    }
+
+    // Save to conversation in localStorage
+    const conv = getCurrentConversation();
+    if (conv && fullAnswer) {
+      conv.messages.push({
+        sender: "bot",
+        text: fullAnswer,
+        time: now.toISOString(),
+      });
+      updateConversationTitleIfNeeded(conv);
+      saveConversations();
+      renderHistoryList();
     }
   } catch (err) {
     console.error(err);
+    setTyping(false);
     if (currentConversationId === activeConvIdAtSend) {
       displayMessage("bot", "⚠ Server error. Please try again.");
     }
-  } finally {
-    // Hide typing indicator
-    setTyping(false);
   }
 }
 

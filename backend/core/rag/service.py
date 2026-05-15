@@ -31,7 +31,12 @@ Today's Date and Time: {current_time}
 
 You can answer questions about the university using the University Knowledge Base, or answer general real-time questions using the Web Search Results.
 
-KEEP YOUR ANSWERS EXTREMELY CRISP AND SIMPLE. Do not write long paragraphs or ramble. Get straight to the point.
+CRITICAL RULES:
+1. KEEP YOUR ANSWERS EXTREMELY CRISP AND SIMPLE. Do not write long paragraphs or ramble. Get straight to the point.
+2. ALWAYS check the Previous Conversation section FIRST. If the user told you their name, preferences, or any personal info earlier, REMEMBER it and use it.
+3. When the user says something personal like "my name is X" or "I am studying Y", simply acknowledge it warmly. Do NOT search the web for their name or personal info. Do NOT treat their name as a search query.
+4. When the user asks "what is my name" or "who am I", look ONLY at the Previous Conversation to find what they told you. If they never told you, say you don't know yet and ask them.
+5. NEVER use web search results to answer personal questions about the user.
 
 <context>
 {context}
@@ -115,7 +120,7 @@ def web_search_fallback(question: str):
 # CHAT MEMORY
 # ---------------------------------------------------
 
-def get_chat_history(limit=3):
+def get_chat_history(limit=6):
     try:
         history = ChatHistory.objects.order_by('-created_at')[:limit]
 
@@ -130,6 +135,29 @@ def get_chat_history(limit=3):
     except Exception as e:
         print("⚠️ Chat history error:", e)
         return ""
+
+
+# ---------------------------------------------------
+# CONVERSATIONAL INTENT DETECTOR
+# ---------------------------------------------------
+
+def is_conversational(question: str) -> bool:
+    """Detect if a question is personal/conversational and should NOT trigger web search."""
+    q = question.strip().lower()
+    personal_patterns = [
+        "my name is", "i am ", "i'm ", "call me ",
+        "what is my name", "what's my name", "who am i",
+        "do you know my name", "remember my name",
+        "do you know me", "do you remember",
+        "how are you", "what can you do", "who are you",
+        "thank you", "thanks", "bye", "goodbye", "good morning",
+        "good evening", "good night", "good afternoon",
+        "nice to meet", "pleased to meet",
+        "i like ", "i love ", "i hate ", "i want ",
+        "i study ", "i'm studying", "my course", "my department",
+        "my college", "my university", "my roll",
+    ]
+    return any(p in q for p in personal_patterns)
 
 
 # ---------------------------------------------------
@@ -187,12 +215,14 @@ def answer_question(question: str) -> dict:
         web_sources_list = []
         from_web = False
 
-        if not docs or len(pdf_context.strip()) < 50:
+        if (not docs or len(pdf_context.strip()) < 50) and not is_conversational(question):
             print("🌐 Triggering Pre-LLM Web Search")
             web_answer, web_sources_list = web_search_fallback(question)
             if web_answer and web_answer != "No clear answer found.":
                 web_context = f"Web Search Results:\n{web_answer}"
                 from_web = True
+        elif is_conversational(question):
+            print("💬 Conversational query detected — skipping web search")
 
         # -------------------------
         # MEMORY
@@ -252,3 +282,86 @@ University Knowledge Base:
             "from_web": False,
             "error": str(e)
         }
+
+
+# ---------------------------------------------------
+# STREAMING RAG FUNCTION (yields tokens)
+# ---------------------------------------------------
+
+def stream_answer_question(question: str):
+    """Generator that yields answer tokens one-by-one for SSE streaming."""
+    import datetime
+    import string
+
+    print("\n==============================")
+    print("📩 [STREAM] Question:", question)
+
+    # --- Fast greeting bypass ---
+    greetings = ["hi", "hello", "hey", "hii", "heya", "greetings"]
+    clean_q = question.strip().lower().translate(str.maketrans('', '', string.punctuation))
+
+    if clean_q in greetings:
+        yield "Hey! How can I help you today?"
+        return
+
+    try:
+        retriever = get_retriever()
+
+        # Retrieval
+        try:
+            docs = retriever.invoke(question) if retriever else []
+        except Exception as e:
+            print("❌ Retriever error:", e)
+            docs = []
+
+        # PDF Context
+        pdf_context = "\n\n".join(
+            d.page_content for d in docs if hasattr(d, "page_content")
+        )
+
+        # Web Search
+        web_context = ""
+        from_web = False
+
+        if (not docs or len(pdf_context.strip()) < 50) and not is_conversational(question):
+            print("🌐 [STREAM] Triggering Pre-LLM Web Search")
+            web_answer, _ = web_search_fallback(question)
+            if web_answer and web_answer != "No clear answer found.":
+                web_context = f"Web Search Results:\n{web_answer}"
+                from_web = True
+        elif is_conversational(question):
+            print("💬 [STREAM] Conversational query — skipping web search")
+
+        # Memory
+        chat_context = get_chat_history()
+
+        # Final Context
+        final_context = f"""
+Previous Conversation:
+{chat_context}
+
+University Knowledge Base:
+{pdf_context}
+
+{web_context}
+"""
+
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        llm = get_llm()
+        chain = prompt | llm
+
+        # Stream tokens instead of invoke
+        for chunk in chain.stream({
+            "context": final_context,
+            "input": question,
+            "current_time": current_time
+        }):
+            if hasattr(chunk, "content") and chunk.content:
+                yield chunk.content
+
+    except Exception as e:
+        print("\n🔥 [STREAM] FULL ERROR TRACE:")
+        import traceback
+        traceback.print_exc()
+        yield f"⚠ Error: {str(e)}"
