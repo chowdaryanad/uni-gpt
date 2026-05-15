@@ -319,13 +319,21 @@ def stream_answer_question(question: str):
             d.page_content for d in docs if hasattr(d, "page_content")
         )
 
+        pdf_sources = []
+        for d in docs:
+            if hasattr(d, "metadata"):
+                src = d.metadata.get("source", "unknown")
+                page = d.metadata.get("page", "?")
+                pdf_sources.append(f"{src} (page {page})")
+
         # Web Search
         web_context = ""
+        web_sources_list = []
         from_web = False
 
         if (not docs or len(pdf_context.strip()) < 50) and not is_conversational(question):
             print("🌐 [STREAM] Triggering Pre-LLM Web Search")
-            web_answer, _ = web_search_fallback(question)
+            web_answer, web_sources_list = web_search_fallback(question)
             if web_answer and web_answer != "No clear answer found.":
                 web_context = f"Web Search Results:\n{web_answer}"
                 from_web = True
@@ -359,6 +367,14 @@ University Knowledge Base:
         }):
             if hasattr(chunk, "content") and chunk.content:
                 yield chunk.content
+        
+        # Finally, yield the sources so the view can send them in the 'done' event
+        yield {
+            "type": "sources",
+            "pdf_sources": pdf_sources,
+            "web_sources": web_sources_list,
+            "from_web": from_web
+        }
 
     except Exception as e:
         print("\n🔥 [STREAM] FULL ERROR TRACE:")

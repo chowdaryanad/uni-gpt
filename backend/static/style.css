@@ -394,3 +394,111 @@ body.dark .typing-bubble {
 body.dark .dot {
   background: #9ca3af;
 }
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.starter-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.chip {
+  background: #ffe0b5;
+  color: #5a3300;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.chip:hover {
+  background: #ffcf91;
+  transform: translateY(-2px);
+}
+
+body.dark .empty-state h3 {
+  color: #e5e5e5;
+}
+body.dark .chip {
+  background: #1f2937;
+  color: #e5e5e5;
+}
+body.dark .chip:hover {
+  background: #374151;
+}
+
+/* ===== Sources & Copy Button ===== */
+.msg-sources {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-badge {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.source-badge.web {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+body.dark .source-badge {
+  background: #334155;
+  color: #cbd5e1;
+}
+
+body.dark .source-badge.web {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.copy-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 14px;
+  padding: 2px 4px;
+  transition: opacity 0.2s;
+  color: inherit;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+}
+
+.bot-msg-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+

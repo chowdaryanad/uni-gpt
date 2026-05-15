@@ -124,12 +124,37 @@ function renderCurrentConversation() {
   const conv = getCurrentConversation();
   if (!conv) return;
 
+  if (conv.messages.length === 0) {
+    // Empty state with starter chips
+    const emptyState = document.createElement("div");
+    emptyState.className = "empty-state";
+    
+    emptyState.innerHTML = `
+      <h3>Welcome to uniGPT!</h3>
+      <p>I can answer questions about the university.</p>
+      <div class="starter-chips">
+        <button class="chip" onclick="handleStarterClick('What are the attendance rules?')">📋 What are the attendance rules?</button>
+        <button class="chip" onclick="handleStarterClick('How do I pay my fees?')">💳 How do I pay my fees?</button>
+        <button class="chip" onclick="handleStarterClick('Where is the library?')">📚 Where is the library?</button>
+      </div>
+    `;
+    chatWindow.appendChild(emptyState);
+    return;
+  }
+
   conv.messages.forEach((m) => {
-    displayMessage(m.sender, m.text, m.time, false); // no auto-store
+    displayMessage(m.sender, m.text, m.time, false, m.sources); // no auto-store
   });
 
   scrollToBottom(false);
 }
+
+window.handleStarterClick = function(text) {
+  if (input) {
+    input.value = text;
+    sendMessage();
+  }
+};
 
 // --- Smooth scroll helper ---
 function scrollToBottom(smooth = true) {
@@ -148,7 +173,7 @@ function setTyping(isTyping) {
 }
 
 // --- Message display with timestamp ---
-function displayMessage(sender, text, timeString = null, storeInConv = true) {
+function displayMessage(sender, text, timeString = null, storeInConv = true, sources = null) {
   if (!chatWindow) return;
 
   // Row wrapper for avatar + bubble
@@ -160,7 +185,7 @@ function displayMessage(sender, text, timeString = null, storeInConv = true) {
   avatar.className = `avatar ${
     sender === "user" ? "avatar-user" : "avatar-bot"
   }`;
-  // Avatar label (you can change these)
+  // Avatar label
   avatar.textContent = sender === "user" ? "U" : "AI";
 
   // Bubble
@@ -170,6 +195,39 @@ function displayMessage(sender, text, timeString = null, storeInConv = true) {
   const textDiv = document.createElement("div");
   textDiv.className = "msg-text";
   textDiv.textContent = text;
+  msg.appendChild(textDiv);
+
+  // Sources block
+  if (sources && sender === "bot") {
+    const sourcesDiv = document.createElement("div");
+    sourcesDiv.className = "msg-sources";
+    
+    if (sources.pdf_sources && sources.pdf_sources.length > 0) {
+      // Remove duplicates
+      const uniqueDocs = [...new Set(sources.pdf_sources)];
+      uniqueDocs.forEach(src => {
+        const span = document.createElement("span");
+        span.className = "source-badge";
+        span.textContent = `📄 ${src}`;
+        sourcesDiv.appendChild(span);
+      });
+    }
+    
+    if (sources.from_web) {
+      const span = document.createElement("span");
+      span.className = "source-badge web";
+      span.textContent = "🌐 Web Search";
+      sourcesDiv.appendChild(span);
+    }
+    
+    if (sourcesDiv.children.length > 0) {
+      msg.appendChild(sourcesDiv);
+    }
+  }
+
+  // Footer (Meta + Copy)
+  const footerDiv = document.createElement("div");
+  footerDiv.className = "bot-msg-footer";
 
   const metaDiv = document.createElement("div");
   metaDiv.className = "msg-meta";
@@ -178,18 +236,35 @@ function displayMessage(sender, text, timeString = null, storeInConv = true) {
     hour: "2-digit",
     minute: "2-digit",
   });
+  footerDiv.appendChild(metaDiv);
 
-  msg.appendChild(textDiv);
-  msg.appendChild(metaDiv);
+  if (sender === "bot") {
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.innerHTML = "📋";
+    copyBtn.title = "Copy to clipboard";
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(textDiv.textContent);
+      copyBtn.innerHTML = "✅";
+      setTimeout(() => copyBtn.innerHTML = "📋", 2000);
+    };
+    footerDiv.appendChild(copyBtn);
+  } else {
+    footerDiv.style.justifyContent = "flex-end";
+  }
 
-  // Order: for bot -> avatar left, for user -> avatar right
-  // CSS .msg-row.user/.bot handles margins, so we just do:
+  msg.appendChild(footerDiv);
+
   row.appendChild(avatar);
   row.appendChild(msg);
 
+  // Remove empty state if it's the first message
+  const emptyState = chatWindow.querySelector(".empty-state");
+  if (emptyState) emptyState.remove();
+
   chatWindow.appendChild(row);
 
-  // Store in conversation (for live messages)
+  // Store in conversation
   if (storeInConv) {
     const conv = getCurrentConversation();
     if (conv) {
@@ -197,6 +272,7 @@ function displayMessage(sender, text, timeString = null, storeInConv = true) {
         sender,
         text,
         time: now.toISOString(),
+        sources: sources
       });
       updateConversationTitleIfNeeded(conv);
       saveConversations();
@@ -244,6 +320,10 @@ async function sendMessage() {
     // Hide typing indicator and create the bot bubble immediately
     setTyping(false);
 
+    // Remove empty state if present
+    const emptyState = chatWindow.querySelector(".empty-state");
+    if (emptyState) emptyState.remove();
+
     // Create bot message row (empty, will fill token by token)
     const row = document.createElement("div");
     row.className = "msg-row bot";
@@ -259,16 +339,7 @@ async function sendMessage() {
     textDiv.className = "msg-text";
     textDiv.textContent = "";
 
-    const metaDiv = document.createElement("div");
-    metaDiv.className = "msg-meta";
-    const now = new Date();
-    metaDiv.textContent = now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
     msg.appendChild(textDiv);
-    msg.appendChild(metaDiv);
     row.appendChild(avatar);
     row.appendChild(msg);
     chatWindow.appendChild(row);
@@ -279,6 +350,8 @@ async function sendMessage() {
     const decoder = new TextDecoder();
     let fullAnswer = "";
     let buffer = "";
+
+    let finalSources = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -303,7 +376,9 @@ async function sendMessage() {
           }
 
           if (payload.done) {
-            // Streaming complete
+            if (payload.sources) {
+              finalSources = payload.sources;
+            }
             break;
           }
 
@@ -317,6 +392,60 @@ async function sendMessage() {
         }
       }
     }
+    
+    // Add meta, sources, and copy button after streaming is done
+    const now = new Date();
+    
+    if (finalSources) {
+      const sourcesDiv = document.createElement("div");
+      sourcesDiv.className = "msg-sources";
+      
+      if (finalSources.pdf_sources && finalSources.pdf_sources.length > 0) {
+        const uniqueDocs = [...new Set(finalSources.pdf_sources)];
+        uniqueDocs.forEach(src => {
+          const span = document.createElement("span");
+          span.className = "source-badge";
+          span.textContent = `📄 ${src}`;
+          sourcesDiv.appendChild(span);
+        });
+      }
+      
+      if (finalSources.from_web) {
+        const span = document.createElement("span");
+        span.className = "source-badge web";
+        span.textContent = "🌐 Web Search";
+        sourcesDiv.appendChild(span);
+      }
+      
+      if (sourcesDiv.children.length > 0) {
+        msg.appendChild(sourcesDiv);
+      }
+    }
+
+    const footerDiv = document.createElement("div");
+    footerDiv.className = "bot-msg-footer";
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "msg-meta";
+    metaDiv.textContent = now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    footerDiv.appendChild(metaDiv);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.innerHTML = "📋";
+    copyBtn.title = "Copy to clipboard";
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(textDiv.textContent);
+      copyBtn.innerHTML = "✅";
+      setTimeout(() => copyBtn.innerHTML = "📋", 2000);
+    };
+    footerDiv.appendChild(copyBtn);
+
+    msg.appendChild(footerDiv);
+    scrollToBottom();
 
     // Check if user switched conversations
     if (currentConversationId !== activeConvIdAtSend) {
@@ -326,6 +455,7 @@ async function sendMessage() {
           sender: "bot",
           text: fullAnswer || "⚠ Chat switched.",
           time: new Date().toISOString(),
+          sources: finalSources
         });
         saveConversations();
       }
@@ -339,6 +469,7 @@ async function sendMessage() {
         sender: "bot",
         text: fullAnswer,
         time: now.toISOString(),
+        sources: finalSources
       });
       updateConversationTitleIfNeeded(conv);
       saveConversations();

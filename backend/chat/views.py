@@ -99,12 +99,17 @@ def chat_stream_view(request):
         full_answer = []
         try:
             for token in stream_answer_question(question):
+                if isinstance(token, dict) and token.get("type") == "sources":
+                    yield f"data: {json.dumps({'done': True, 'sources': token})}\n\n"
+                    break
+
                 full_answer.append(token)
                 # SSE format: data: <payload>\n\n
                 yield f"data: {json.dumps({'token': token})}\n\n"
 
-            # Send done signal
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            # Send done signal if we didn't break via the sources dict
+            if not isinstance(token, dict):
+                yield f"data: {json.dumps({'done': True})}\n\n"
 
             # Save complete answer to DB
             complete = "".join(full_answer).strip()
